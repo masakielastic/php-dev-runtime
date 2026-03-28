@@ -26,6 +26,19 @@ final class RuntimeServer
     {
         $staticFiles = new StaticFileMiddleware($this->context->publicPath);
         $errorHandler = new ErrorHandler();
+        $gateway = new ApplicationGateway(
+            $this->application,
+            $staticFiles,
+            $errorHandler,
+            $this->context->debug,
+        );
+
+        if ($this->context->protocol->http2Enabled) {
+            $this->runHttp2($gateway);
+
+            return;
+        }
+
         $adapter = new RequestHandlerAdapter(
             $this->application,
             $staticFiles,
@@ -43,16 +56,7 @@ final class RuntimeServer
 
         $this->bootLifecycle();
         $this->registerSignalHandlers($socket);
-
-        $this->stderr(sprintf(
-            "Development server listening on %s://%s:%d\n",
-            $this->context->tls->scheme(),
-            $this->context->host,
-            $this->context->port,
-        ));
-        $this->stderr(sprintf("Application root: %s\n", $this->context->appRoot));
-        $this->stderr(sprintf("Public path: %s\n", $this->context->publicPath));
-        $this->stderr(sprintf("TLS: %s\n", $this->context->tls->enabled ? 'enabled' : 'disabled'));
+        $this->printStartupInfo();
 
         try {
             Loop::run();
@@ -111,6 +115,21 @@ final class RuntimeServer
         return true;
     }
 
+    private function runHttp2(ApplicationGateway $gateway): void
+    {
+        $server = new Http2Server($this->context, $gateway);
+
+        $this->bootLifecycle();
+        $this->registerHttp2SignalHandlers($server);
+        $this->printStartupInfo();
+
+        try {
+            $server->run();
+        } finally {
+            $this->shutdownLifecycle();
+        }
+    }
+
     private function buildListenUri(): string
     {
         return sprintf(
@@ -134,6 +153,51 @@ final class RuntimeServer
         ];
 
         return ['tls' => $tls];
+    }
+
+    private function registerHttp2SignalHandlers(Http2Server $server): void
+    {
+        if (!function_exists('pcntl_signal') || !defined('SIGINT')) {
+            return;
+        }
+
+        pcntl_async_signals(true);
+
+        pcntl_signal(SIGINT, function () use ($server): void {
+            if ($this->stopping) {
+                return;
+            }
+
+            $this->stopping = true;
+            $this->stderr("Stopping development server...\n");
+            $server->stop();
+        });
+
+        if (defined('SIGTERM')) {
+            pcntl_signal(SIGTERM, function () use ($server): void {
+                if ($this->stopping) {
+                    return;
+                }
+
+                $this->stopping = true;
+                $this->stderr("Stopping development server...\n");
+                $server->stop();
+            });
+        }
+    }
+
+    private function printStartupInfo(): void
+    {
+        $this->stderr(sprintf(
+            "Development server listening on %s://%s:%d\n",
+            $this->context->tls->scheme(),
+            $this->context->host,
+            $this->context->port,
+        ));
+        $this->stderr(sprintf("Protocol: %s\n", $this->context->protocol->displayName()));
+        $this->stderr(sprintf("Application root: %s\n", $this->context->appRoot));
+        $this->stderr(sprintf("Public path: %s\n", $this->context->publicPath));
+        $this->stderr(sprintf("TLS: %s\n", $this->context->tls->enabled ? 'enabled' : 'disabled'));
     }
 
     private function stderr(string $message): void

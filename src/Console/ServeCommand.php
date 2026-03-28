@@ -6,6 +6,7 @@ namespace PhpDevRuntime\Console;
 
 use PhpDevRuntime\Http\RuntimeServer;
 use PhpDevRuntime\Runtime\AppFactory;
+use PhpDevRuntime\Runtime\ProtocolConfiguration;
 use PhpDevRuntime\Runtime\RuntimeContext;
 use PhpDevRuntime\Runtime\TlsConfiguration;
 use Throwable;
@@ -29,7 +30,7 @@ final class ServeCommand
         }
 
         try {
-            [$appFile, $host, $port, $publicPath, $environment, $debug, $tls] = $this->parseServeArguments($args);
+            [$appFile, $host, $port, $publicPath, $environment, $debug, $tls, $protocol] = $this->parseServeArguments($args);
 
             $application = $this->appFactory->createFromFile($appFile);
             $context = new RuntimeContext(
@@ -40,6 +41,7 @@ final class ServeCommand
                 $port,
                 $debug,
                 $tls,
+                $protocol,
             );
 
             (new RuntimeServer($application, $context))->run();
@@ -59,6 +61,7 @@ final class ServeCommand
         $debug = true;
         $publicPath = null;
         $tlsEnabled = true;
+        $http2Enabled = false;
         $passphrase = getenv('PHP_DEV_RUNTIME_TLS_PASSPHRASE') ?: null;
         $positionals = [];
 
@@ -84,6 +87,7 @@ final class ServeCommand
                 '-a', '--address', '--host' => $host = $this->optionValue($arg, $value, $args),
                 '-d', '--htdocs', '--public' => $publicPath = $this->normalizePath($this->optionValue($arg, $value, $args)),
                 '--env' => $environment = $this->optionValue($arg, $value, $args),
+                '--http2' => $http2Enabled = true,
                 '--tls-passphrase' => $passphrase = $this->optionValue($arg, $value, $args),
                 '--no-debug' => $debug = false,
                 '--no-tls' => $tlsEnabled = false,
@@ -104,6 +108,7 @@ final class ServeCommand
         $port = $this->parsePort(array_shift($positionals));
         $publicPath ??= $this->appFactory->inferPublicPath($appFile);
         $tls = $this->parseTlsConfiguration($tlsEnabled, $positionals, $passphrase);
+        $protocol = new ProtocolConfiguration($http2Enabled);
 
         return [
             $appFile,
@@ -113,6 +118,7 @@ final class ServeCommand
             $environment,
             $debug,
             $tls,
+            $protocol,
         ];
     }
 
@@ -211,6 +217,7 @@ Example:
 Options:
   -a, --address=<ADDR>       Bind to the given address. Default: 127.0.0.1
   -d, --htdocs=<PATH>        Serve static files from the given directory
+      --http2                Serve HTTP/2 instead of HTTP/1.1
       --env=<ENV>            Runtime environment name. Default: dev
       --no-debug             Disable detailed development error pages
       --no-tls               Disable TLS and serve plain HTTP

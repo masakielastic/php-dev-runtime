@@ -14,6 +14,7 @@ final readonly class RuntimeContext
         public int $port,
         public bool $debug,
         public TlsConfiguration $tls,
+        public ProtocolConfiguration $protocol,
     ) {
     }
 }
