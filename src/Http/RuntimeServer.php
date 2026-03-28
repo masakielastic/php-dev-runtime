@@ -31,22 +31,28 @@ final class RuntimeServer
             $staticFiles,
             $errorHandler,
             $this->context->debug,
+            $this->context->tls->scheme(),
         );
 
         $server = new HttpServer($adapter);
-        $socket = new SocketServer(sprintf('%s:%d', $this->context->host, $this->context->port));
+        $socket = new SocketServer(
+            $this->buildListenUri(),
+            $this->buildSocketContext(),
+        );
         $server->listen($socket);
 
         $this->bootLifecycle();
-        $this->registerSignalHandlers($server, $socket);
+        $this->registerSignalHandlers($socket);
 
         $this->stderr(sprintf(
-            "Development server listening on http://%s:%d\n",
+            "Development server listening on %s://%s:%d\n",
+            $this->context->tls->scheme(),
             $this->context->host,
             $this->context->port,
         ));
         $this->stderr(sprintf("Application root: %s\n", $this->context->appRoot));
         $this->stderr(sprintf("Public path: %s\n", $this->context->publicPath));
+        $this->stderr(sprintf("TLS: %s\n", $this->context->tls->enabled ? 'enabled' : 'disabled'));
 
         try {
             Loop::run();
@@ -78,20 +84,20 @@ final class RuntimeServer
         }
     }
 
-    private function registerSignalHandlers(HttpServer $server, SocketServer $socket): void
+    private function registerSignalHandlers(SocketServer $socket): void
     {
         if (!defined('SIGINT') || !method_exists(Loop::class, 'addSignal')) {
             return;
         }
 
-        Loop::addSignal(SIGINT, fn (): bool => $this->stop($server, $socket));
+        Loop::addSignal(SIGINT, fn (): bool => $this->stop($socket));
 
         if (defined('SIGTERM')) {
-            Loop::addSignal(SIGTERM, fn (): bool => $this->stop($server, $socket));
+            Loop::addSignal(SIGTERM, fn (): bool => $this->stop($socket));
         }
     }
 
-    private function stop(HttpServer $server, SocketServer $socket): bool
+    private function stop(SocketServer $socket): bool
     {
         if ($this->stopping) {
             return false;
@@ -103,6 +109,31 @@ final class RuntimeServer
         Loop::stop();
 
         return true;
+    }
+
+    private function buildListenUri(): string
+    {
+        return sprintf(
+            '%s://%s:%d',
+            $this->context->tls->enabled ? 'tls' : 'tcp',
+            $this->context->host,
+            $this->context->port,
+        );
+    }
+
+    private function buildSocketContext(): array
+    {
+        if (!$this->context->tls->enabled) {
+            return [];
+        }
+
+        $tls = [
+            'local_cert' => $this->context->tls->certificateFile,
+            'local_pk' => $this->context->tls->privateKeyFile,
+            'passphrase' => $this->context->tls->passphrase ?? '',
+        ];
+
+        return ['tls' => $tls];
     }
 
     private function stderr(string $message): void

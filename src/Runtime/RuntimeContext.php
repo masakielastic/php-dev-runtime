@@ -13,6 +13,7 @@ final readonly class RuntimeContext
         public string $host,
         public int $port,
         public bool $debug,
+        public TlsConfiguration $tls,
     ) {
     }
 }

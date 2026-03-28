@@ -20,11 +20,14 @@ final class RequestHandlerAdapter
         private StaticFileMiddleware $staticFiles,
         private ErrorHandler $errorHandler,
         private bool $debug,
+        private string $scheme,
     ) {
     }
 
     public function __invoke(ServerRequestInterface $request): ResponseInterface|PromiseInterface
     {
+        $request = $request->withUri($request->getUri()->withScheme($this->scheme));
+
         $staticResponse = $this->staticFiles->serve($request);
 
         if ($staticResponse instanceof ResponseInterface) {
