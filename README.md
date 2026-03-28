@@ -1,26 +1,26 @@
 # php-dev-runtime
 
-`php-dev-runtime` は、ReactPHP を内部実装に使いながら、公開 API は通常の request/response に寄せた開発用 HTTP ランタイムです。
+`php-dev-runtime` is a development-focused HTTP runtime that uses ReactPHP internally while keeping its public API centered on a conventional request/response model.
 
-- 対象は HTTP/1.1 のみ
-- 用途は開発用・プロジェクト限定
-- アプリ境界は `ApplicationInterface` に固定
-- ReactPHP の loop/socket/stream は公開 API に出さない
-- Promise は許容するが、通常利用では同期的な `ResponseInterface` 返却を主経路にする
+- HTTP/1.1 only
+- Intended for development and project-local use
+- The application boundary is fixed to `ApplicationInterface`
+- ReactPHP loop/socket/stream objects are not exposed through the public API
+- Promises are allowed, but the primary path is a synchronous `ResponseInterface` return value
 
-## インストール
+## Installation
 
 ```bash
 composer install
 ```
 
-## 使い方
+## Usage
 
 ```bash
 bin/dev-server serve examples/hello-app/app.php --host=127.0.0.1 --port=8080
 ```
 
-オプション:
+Options:
 
 - `--host=127.0.0.1`
 - `--port=8080`
@@ -28,9 +28,9 @@ bin/dev-server serve examples/hello-app/app.php --host=127.0.0.1 --port=8080
 - `--env=dev`
 - `--no-debug`
 
-`--public` を省略した場合は、アプリファイルと同じディレクトリ配下の `public/` を利用します。
+If `--public` is omitted, the runtime uses the `public/` directory next to the application file.
 
-## アプリケーション API
+## Application API
 
 ```php
 <?php
@@ -46,9 +46,9 @@ interface ApplicationInterface
 }
 ```
 
-通常は `ResponseInterface` をそのまま返してください。必要な箇所だけ Promise を返せますが、ランタイム外へ event loop や socket は露出しません。
+In the normal case, return `ResponseInterface` directly. You may return a Promise where needed, but the runtime does not expose the event loop or sockets to application code.
 
-任意でライフサイクルも実装できます。
+You can also implement lifecycle hooks if needed.
 
 ```php
 <?php
@@ -63,9 +63,9 @@ interface LifespanInterface
 }
 ```
 
-`RuntimeContext` は `environment`、`appRoot`、`publicPath`、`host`、`port`、`debug` のような設定値だけを持ち、ReactPHP の loop は含みません。
+`RuntimeContext` only carries configuration-like values such as `environment`, `appRoot`, `publicPath`, `host`, `port`, and `debug`. It does not include the ReactPHP loop.
 
-## ディレクトリ構成
+## Directory Layout
 
 ```text
 .
@@ -94,30 +94,30 @@ interface LifespanInterface
 └── README.md
 ```
 
-## 実装方針
+## Implementation Notes
 
-- ReactPHP は `RuntimeServer` に閉じ込め、アプリ層は `handle()` だけを知ればよい構成にしています。
-- `RequestHandlerAdapter` が static file 配信、アプリ呼び出し、Promise の吸収、例外時のエラーレスポンス生成をまとめて担当します。
-- `StaticFileMiddleware` は `public/` 配下だけを配信し、アプリケーションコードを経由させません。
-- エラーページは開発向けに最小限の詳細を返します。`--no-debug` では詳細を抑制します。
-- CLI は `serve` のみで、複雑なコマンドフレームワークは入れていません。
+- ReactPHP is contained inside `RuntimeServer`, so the application layer only needs to know about `handle()`.
+- `RequestHandlerAdapter` centralizes static file serving, application dispatch, Promise normalization, and exception-to-response conversion.
+- `StaticFileMiddleware` only serves files from `public/` and does not pass those requests through application code.
+- Error pages return minimal development-oriented details. `--no-debug` suppresses those details.
+- The CLI only supports `serve`; there is no heavier command framework in this minimal setup.
 
-## サンプル
+## Example
 
-`examples/hello-app/app.php` は以下を示します。
+`examples/hello-app/app.php` demonstrates:
 
-- 通常の同期的 request/response
-- `startup()` / `shutdown()` の利用
-- `/boom` での開発向けエラーページ
-- `public/index.html` の静的配信
+- A normal synchronous request/response flow
+- `startup()` / `shutdown()` lifecycle hooks
+- A development error page via `/boom`
+- Static file delivery from `public/index.html`
 
-## 今回 intentionally 含めていないもの
+## What Is Intentionally Out of Scope
 
 - HTTP/2
 - WebSocket
 - SSE
-- ホットリロード
-- 本番向けチューニング
-- 高度なミドルウェアパイプライン
-- DI コンテナ統合
-- ReactPHP の低レベル API の公開
+- Hot reload
+- Production-oriented tuning
+- Advanced middleware pipelines
+- DI container integration
+- Public exposure of ReactPHP low-level APIs
