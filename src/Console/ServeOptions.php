@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace PhpDevRuntime\Console;
 
 use PhpDevRuntime\Runtime\ProtocolConfiguration;
+use PhpDevRuntime\Runtime\ReloadConfiguration;
 use PhpDevRuntime\Runtime\TlsConfiguration;
 
 final readonly class ServeOptions
@@ -18,6 +19,7 @@ final readonly class ServeOptions
         public bool $debug,
         public TlsConfiguration $tls,
         public ProtocolConfiguration $protocol,
+        public ReloadConfiguration $reload,
     ) {
     }
 }

@@ -7,6 +7,7 @@ namespace PhpDevRuntime\Console;
 use InvalidArgumentException;
 use PhpDevRuntime\Runtime\AppFactory;
 use PhpDevRuntime\Runtime\ProtocolConfiguration;
+use PhpDevRuntime\Runtime\ReloadConfiguration;
 use PhpDevRuntime\Runtime\TlsConfiguration;
 
 final class ServeOptionsParser
@@ -23,6 +24,8 @@ final class ServeOptionsParser
         $publicPath = null;
         $tlsEnabled = true;
         $http2Enabled = false;
+        $reloadEnabled = false;
+        $reloadInterval = 500;
         $passphrase = getenv('PHP_DEV_RUNTIME_TLS_PASSPHRASE') ?: null;
         $positionals = [];
 
@@ -48,6 +51,8 @@ final class ServeOptionsParser
                 '-d', '--htdocs', '--public' => $publicPath = $this->normalizePath($this->optionValue($arg, $value, $args)),
                 '--env' => $environment = $this->optionValue($arg, $value, $args),
                 '--http2' => $http2Enabled = true,
+                '--reload' => $reloadEnabled = true,
+                '--reload-interval' => $reloadInterval = $this->parseReloadInterval($this->optionValue($arg, $value, $args)),
                 '--tls-passphrase' => $passphrase = $this->optionValue($arg, $value, $args),
                 '--no-debug' => $debug = false,
                 '--no-tls' => $tlsEnabled = false,
@@ -69,6 +74,11 @@ final class ServeOptionsParser
         $publicPath ??= $this->appFactory->inferPublicPath($appFile);
         $tls = $this->parseTlsConfiguration($tlsEnabled, $positionals, $passphrase);
         $protocol = new ProtocolConfiguration($http2Enabled);
+        $reload = new ReloadConfiguration(
+            $reloadEnabled,
+            $reloadInterval,
+            $this->buildWatchPaths($appFile, $publicPath),
+        );
 
         return new ServeOptions(
             $appFile,
@@ -79,7 +89,21 @@ final class ServeOptionsParser
             $debug,
             $tls,
             $protocol,
+            $reload,
         );
+    }
+
+    private function buildWatchPaths(string $appFile, string $publicPath): array
+    {
+        $paths = [
+            dirname($appFile),
+        ];
+
+        if ($publicPath !== dirname($appFile) && !in_array($publicPath, $paths, true)) {
+            $paths[] = $publicPath;
+        }
+
+        return $paths;
     }
 
     private function parseTlsConfiguration(bool $tlsEnabled, array $positionals, ?string $passphrase): TlsConfiguration
@@ -120,6 +144,21 @@ final class ServeOptionsParser
 
         if ($value < 1 || $value > 65535) {
             throw new InvalidArgumentException(sprintf('Listen port "%s" is out of range.', $port));
+        }
+
+        return $value;
+    }
+
+    private function parseReloadInterval(string $interval): int
+    {
+        if (!ctype_digit($interval)) {
+            throw new InvalidArgumentException(sprintf('Invalid reload interval "%s".', $interval));
+        }
+
+        $value = (int) $interval;
+
+        if ($value < 50) {
+            throw new InvalidArgumentException('Reload interval must be at least 50 milliseconds.');
         }
 
         return $value;

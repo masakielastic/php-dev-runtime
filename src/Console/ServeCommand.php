@@ -14,6 +14,7 @@ final class ServeCommand
     public function __construct(
         private AppFactory $appFactory = new AppFactory(),
         private ServeOptionsParser $optionsParser = new ServeOptionsParser(),
+        private ReloadSupervisor $reloadSupervisor = new ReloadSupervisor(),
     )
     {
     }
@@ -33,6 +34,10 @@ final class ServeCommand
         try {
             $options = $this->optionsParser->parse($args);
 
+            if ($this->reloadSupervisor->shouldSupervise($options)) {
+                return $this->reloadSupervisor->run($argv, $options->reload);
+            }
+
             $application = $this->appFactory->createFromFile($options->appFile);
             $context = new RuntimeContext(
                 $options->environment,
@@ -43,6 +48,7 @@ final class ServeCommand
                 $options->debug,
                 $options->tls,
                 $options->protocol,
+                $options->reload,
             );
 
             (new RuntimeServer($application, $context))->run();
@@ -69,6 +75,8 @@ Options:
   -a, --address=<ADDR>       Bind to the given address. Default: 127.0.0.1
   -d, --htdocs=<PATH>        Serve static files from the given directory
       --http2                Serve HTTP/2 instead of HTTP/1.1
+      --reload               Restart the server process when files change
+      --reload-interval=<MS> Polling interval for reload detection. Default: 500
       --env=<ENV>            Runtime environment name. Default: dev
       --no-debug             Disable detailed development error pages
       --no-tls               Disable TLS and serve plain HTTP

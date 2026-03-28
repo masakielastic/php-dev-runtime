@@ -26,6 +26,8 @@ Options:
 - `-a, --address=127.0.0.1`
 - `-d, --htdocs=path`
 - `--http2`
+- `--reload`
+- `--reload-interval=500`
 - `--env=dev`
 - `--no-debug`
 - `--no-tls`
@@ -46,6 +48,9 @@ bin/dev-server serve --no-tls examples/hello-app/app.php 8080
 # Cleartext HTTP/2 prior knowledge
 bin/dev-server serve --http2 --no-tls examples/hello-app/app.php 8080
 
+# HTTP/1.1 with hot reload
+bin/dev-server serve --reload --no-tls examples/hello-app/app.php 8080
+
 # HTTPS with an explicit static directory
 bin/dev-server serve \
   -a 127.0.0.1 \
@@ -61,6 +66,8 @@ If `--htdocs` is omitted, the runtime uses the `public/` directory next to the a
 TLS is enabled by default. Unless `--no-tls` is set, `<PRIVATE_KEY>` and `<CERT>` are required.
 
 HTTP/2 is opt-in via `--http2`. Without it, the server continues to use the ReactPHP-based HTTP/1.1 adapter.
+
+Hot reload is opt-in via `--reload`. In reload mode, a parent supervisor process watches the application directory and restarts the child server process when files change. This avoids PHP class redefinition issues inside a long-running process.
 
 ## TLS for Development
 
@@ -168,6 +175,7 @@ interface LifespanInterface
 - `RequestHandlerAdapter` centralizes static file serving, application dispatch, Promise normalization, and exception-to-response conversion.
 - TLS termination is handled inside `RuntimeServer`, so application code still sees a normal request/response boundary.
 - HTTP/2 support is implemented as a separate internal server path inspired by the `Http2Runner.php` approach in `symfony-runtime-stream-http-server-lab`, while preserving the same application boundary.
+- Hot reload is implemented as process supervision instead of in-process class swapping.
 - `StaticFileMiddleware` only serves files from `public/` and does not pass those requests through application code.
 - Error pages return minimal development-oriented details. `--no-debug` suppresses those details.
 - The CLI only supports `serve`; there is no heavier command framework in this minimal setup.
@@ -193,7 +201,6 @@ Current HTTP/2 constraints:
 
 - WebSocket
 - SSE
-- Hot reload
 - Production-oriented tuning
 - Advanced middleware pipelines
 - DI container integration
